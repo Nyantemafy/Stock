@@ -13,12 +13,15 @@ import javax.swing.BorderFactory;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Main {
@@ -79,23 +82,25 @@ public class Main {
 
     private void ajouterEntreeStock() {
         try {
-            int idArticle = getIdArticleSelectionne();
+            Article article = getArticleSelectionneDepuisTable();
 
-            JPanel mouvementForm = FormGenerator.genererFormulaire(MouvementForm.class,
+            JPanel mouvementForms = FormGenerator.genererFormulaires(MouvementForm.class, 1,
                     "nombre", "prixUnitaire", "dateMouvement", "idSource");
 
-            if (!AffichageGenerator.validerFormulaire(frame, mouvementForm, "Entree stock")) {
+            JPanel ficheStock = FicheGenerator.genererFiche(article,
+                    "idArticle", "nom", "modeGestion", "quantiteStock", "valeurStock");
+
+            JPanel panel = AffichageGenerator.genererPanelGrille(2, 1);
+            AffichageGenerator.ajouterDansPanel(panel, ficheStock);
+            AffichageGenerator.ajouterDansPanel(panel, creerPanelSaisiesMultiples(mouvementForms));
+
+            if (!AffichageGenerator.validerFormulaire(frame, panel, "Entree stock")) {
                 return;
             }
 
-            BigDecimal nombre = new BigDecimal(FormGenerator.getValeur(mouvementForm, "nombre"));
-            BigDecimal pu = new BigDecimal(FormGenerator.getValeur(mouvementForm, "prixUnitaire"));
-            String dateTexte = FormGenerator.getValeur(mouvementForm, "dateMouvement");
-            String idSource = FormGenerator.getValeur(mouvementForm, "idSource");
+            List<MouvementStock> mouvements = lireEntreesStock(mouvementForms);
 
-            Timestamp date = new Timestamp(new SimpleDateFormat("yyyy-MM-dd").parse(dateTexte).getTime());
-
-            dao.ajouterMouvementStock(idArticle, "ENTREE", nombre, pu, date, idSource);
+            dao.ajouterMouvementsStock(article.getIdArticle(), mouvements);
             afficherArticles();
 
         } catch (Exception e) {
@@ -107,7 +112,7 @@ public class Main {
         try {
             Article article = getArticleSelectionneDepuisTable();
 
-            JPanel sortieForm = FormGenerator.genererFormulaire(model.SortieStockForm.class,
+            JPanel sortieForms = FormGenerator.genererFormulaires(model.SortieStockForm.class, 1,
                     "nombre", "dateMouvement");
 
             JPanel ficheStock = FicheGenerator.genererFiche(article,
@@ -115,23 +120,96 @@ public class Main {
 
             JPanel panel = AffichageGenerator.genererPanelGrille(2, 1);
             AffichageGenerator.ajouterDansPanel(panel, ficheStock);
-            AffichageGenerator.ajouterDansPanel(panel, sortieForm);
+            AffichageGenerator.ajouterDansPanel(panel, creerPanelSaisiesMultiples(sortieForms));
 
             if (!AffichageGenerator.validerFormulaire(frame, panel, "Sortie stock")) {
                 return;
             }
 
-            BigDecimal nombre = new BigDecimal(FormGenerator.getValeur(sortieForm, "nombre"));
-            String dateTexte = FormGenerator.getValeur(sortieForm, "dateMouvement");
+            List<MouvementStock> mouvements = lireSortiesStock(sortieForms);
 
-            Timestamp date = new Timestamp(new SimpleDateFormat("yyyy-MM-dd").parse(dateTexte).getTime());
-
-            dao.ajouterSortieStock(article.getIdArticle(), article.getModeGestion(), nombre, date);
+            dao.ajouterSortiesStock(article.getIdArticle(), article.getModeGestion(), mouvements);
             afficherArticles();
 
         } catch (Exception e) {
             afficherErreur(e);
         }
+    }
+
+    private JPanel creerPanelSaisiesMultiples(JPanel formulaires) {
+        JPanel panel = AffichageGenerator.genererPanelBordure();
+        JPanel boutons = AffichageGenerator.genererPanelSimple();
+        JScrollPane scroll = AffichageGenerator.genererScrollPane(formulaires);
+
+        scroll.setPreferredSize(new Dimension(520, 260));
+
+        AffichageGenerator.ajouterDansPanel(boutons,
+                AffichageGenerator.genererBouton("Ajouter ligne", () -> FormGenerator.ajouterFormulaire(formulaires)));
+        AffichageGenerator.ajouterDansPanel(boutons,
+                AffichageGenerator.genererBouton("Supprimer ligne",
+                        () -> FormGenerator.supprimerDernierFormulaire(formulaires)));
+
+        panel.add(scroll, java.awt.BorderLayout.CENTER);
+        panel.add(boutons, java.awt.BorderLayout.SOUTH);
+        return panel;
+    }
+
+    private List<MouvementStock> lireEntreesStock(JPanel mouvementForms) throws Exception {
+        List<MouvementStock> mouvements = new ArrayList<MouvementStock>();
+
+        for (JPanel mouvementForm : FormGenerator.getFormulaires(mouvementForms)) {
+            if (FormGenerator.estVide(mouvementForm)) {
+                continue;
+            }
+
+            BigDecimal nombre = new BigDecimal(lireValeurObligatoire(mouvementForm, "nombre"));
+            BigDecimal pu = new BigDecimal(lireValeurObligatoire(mouvementForm, "prixUnitaire"));
+            Timestamp date = lireDateMouvement(lireValeurObligatoire(mouvementForm, "dateMouvement"));
+            String idSource = FormGenerator.getValeur(mouvementForm, "idSource");
+
+            mouvements.add(new MouvementStock("ENTREE", nombre, pu, date, idSource));
+        }
+
+        verifierMouvementsSaisis(mouvements);
+        return mouvements;
+    }
+
+    private List<MouvementStock> lireSortiesStock(JPanel sortieForms) throws Exception {
+        List<MouvementStock> mouvements = new ArrayList<MouvementStock>();
+
+        for (JPanel sortieForm : FormGenerator.getFormulaires(sortieForms)) {
+            if (FormGenerator.estVide(sortieForm)) {
+                continue;
+            }
+
+            BigDecimal nombre = new BigDecimal(lireValeurObligatoire(sortieForm, "nombre"));
+            Timestamp date = lireDateMouvement(lireValeurObligatoire(sortieForm, "dateMouvement"));
+
+            mouvements.add(new MouvementStock("SORTIE", nombre, BigDecimal.ZERO, date, null));
+        }
+
+        verifierMouvementsSaisis(mouvements);
+        return mouvements;
+    }
+
+    private void verifierMouvementsSaisis(List<MouvementStock> mouvements) {
+        if (mouvements.isEmpty()) {
+            throw new RuntimeException("Saisir au moins une ligne.");
+        }
+    }
+
+    private String lireValeurObligatoire(JPanel formulaire, String champ) {
+        String valeur = FormGenerator.getValeur(formulaire, champ);
+
+        if (valeur == null || valeur.trim().equals("")) {
+            throw new RuntimeException("Champ obligatoire : " + champ);
+        }
+
+        return valeur.trim();
+    }
+
+    private Timestamp lireDateMouvement(String texte) throws Exception {
+        return new Timestamp(new SimpleDateFormat("yyyy-MM-dd").parse(texte).getTime());
     }
 
     private JPanel creerPanelBas() {

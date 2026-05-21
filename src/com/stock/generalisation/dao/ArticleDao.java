@@ -210,20 +210,40 @@ public class ArticleDao {
     public void ajouterMouvementStock(int idArticle, String typeMouvement, BigDecimal nombre, BigDecimal pu,
             Timestamp dateMouvement, String idSource)
             throws SQLException {
-        String sql = ""
-                + "insert into mouvement_stock(id_article, type_mouvement, nombre, pu, date_mouvement, id_source) "
-                + "values(?, ?, ?, ?, ?, ?)";
         Connection con = ConnexionPostgres.ouvrir();
-        PreparedStatement ps = con.prepareStatement(sql);
-        ps.setInt(1, idArticle);
-        ps.setString(2, typeMouvement);
-        ps.setBigDecimal(3, nombre);
-        ps.setBigDecimal(4, pu);
-        ps.setTimestamp(5, dateMouvement);
-        ps.setString(6, idSource);
-        ps.executeUpdate();
-        ps.close();
-        con.close();
+
+        try {
+            insererMouvement(con, idArticle, typeMouvement, nombre, pu, dateMouvement, idSource);
+        } finally {
+            con.close();
+        }
+    }
+
+    public void ajouterMouvementsStock(int idArticle, List<MouvementStock> mouvements) throws SQLException {
+        Connection con = ConnexionPostgres.ouvrir();
+
+        try {
+            con.setAutoCommit(false);
+
+            for (MouvementStock mouvement : mouvements) {
+                insererMouvement(
+                        con,
+                        idArticle,
+                        mouvement.getTypeMouvement(),
+                        mouvement.getNombre(),
+                        mouvement.getPrixUnitaire(),
+                        mouvement.getDateMouvement(),
+                        mouvement.getIdSource());
+            }
+
+            con.commit();
+
+        } catch (Exception e) {
+            con.rollback();
+            throw e;
+        } finally {
+            con.close();
+        }
     }
 
     public void supprimerMouvementStock(int idMouvementStock) throws SQLException {
@@ -406,62 +426,28 @@ public class ArticleDao {
 
         try {
             con.setAutoCommit(false);
+            ajouterSortieStock(con, idArticle, modeGestion, quantiteDemandee, dateMouvement);
 
-            BigDecimal reste = quantiteDemandee;
+            con.commit();
 
-            String orderBy = "FIFO".equalsIgnoreCase(modeGestion)
-                    ? "order by e.date_mouvement asc, e.id_mouvement_stock asc"
-                    : "order by e.date_mouvement desc, e.id_mouvement_stock desc";
+        } catch (Exception e) {
+            con.rollback();
+            throw e;
+        } finally {
+            con.close();
+        }
+    }
 
-            if ("CUMP".equalsIgnoreCase(modeGestion)) {
-                BigDecimal cump = calculerCump(con, idArticle);
+    public void ajouterSortiesStock(int idArticle, String modeGestion, List<MouvementStock> mouvements)
+            throws SQLException {
 
-                insererMouvement(con, idArticle, "SORTIE", quantiteDemandee, cump, dateMouvement, "CUMP");
+        Connection con = ConnexionPostgres.ouvrir();
 
-                con.commit();
-                return;
-            }
+        try {
+            con.setAutoCommit(false);
 
-            String sql = ""
-                    + "select e.id_mouvement_stock, e.nombre, e.pu, "
-                    + "e.nombre - coalesce(sum(s.nombre), 0) as reste_disponible "
-                    + "from mouvement_stock e "
-                    + "left join mouvement_stock s on s.id_source = cast(e.id_mouvement_stock as varchar) "
-                    + "and s.type_mouvement = 'SORTIE' "
-                    + "where e.id_article = ? "
-                    + "and e.type_mouvement = 'ENTREE' "
-                    + "group by e.id_mouvement_stock, e.nombre, e.pu, e.date_mouvement "
-                    + "having e.nombre - coalesce(sum(s.nombre), 0) > 0 "
-                    + orderBy;
-
-            PreparedStatement ps = con.prepareStatement(sql);
-            ps.setInt(1, idArticle);
-            ResultSet rs = ps.executeQuery();
-
-            while (rs.next() && reste.compareTo(BigDecimal.ZERO) > 0) {
-                int idEntree = rs.getInt("id_mouvement_stock");
-                BigDecimal disponible = rs.getBigDecimal("reste_disponible");
-                BigDecimal pu = rs.getBigDecimal("pu");
-
-                BigDecimal quantiteSortie = reste.min(disponible);
-
-                insererMouvement(
-                        con,
-                        idArticle,
-                        "SORTIE",
-                        quantiteSortie,
-                        pu,
-                        dateMouvement,
-                        String.valueOf(idEntree));
-
-                reste = reste.subtract(quantiteSortie);
-            }
-
-            rs.close();
-            ps.close();
-
-            if (reste.compareTo(BigDecimal.ZERO) > 0) {
-                throw new SQLException("Stock insuffisant. Quantite manquante : " + reste);
+            for (MouvementStock mouvement : mouvements) {
+                ajouterSortieStock(con, idArticle, modeGestion, mouvement.getNombre(), mouvement.getDateMouvement());
             }
 
             con.commit();
@@ -471,6 +457,66 @@ public class ArticleDao {
             throw e;
         } finally {
             con.close();
+        }
+    }
+
+    private void ajouterSortieStock(Connection con, int idArticle, String modeGestion, BigDecimal quantiteDemandee,
+            Timestamp dateMouvement)
+            throws SQLException {
+
+        BigDecimal reste = quantiteDemandee;
+
+        String orderBy = "FIFO".equalsIgnoreCase(modeGestion)
+                ? "order by e.date_mouvement asc, e.id_mouvement_stock asc"
+                : "order by e.date_mouvement desc, e.id_mouvement_stock desc";
+
+        if ("CUMP".equalsIgnoreCase(modeGestion)) {
+            BigDecimal cump = calculerCump(con, idArticle);
+
+            insererMouvement(con, idArticle, "SORTIE", quantiteDemandee, cump, dateMouvement, "CUMP");
+            return;
+        }
+
+        String sql = ""
+                + "select e.id_mouvement_stock, e.nombre, e.pu, "
+                + "e.nombre - coalesce(sum(s.nombre), 0) as reste_disponible "
+                + "from mouvement_stock e "
+                + "left join mouvement_stock s on s.id_source = cast(e.id_mouvement_stock as varchar) "
+                + "and s.type_mouvement = 'SORTIE' "
+                + "where e.id_article = ? "
+                + "and e.type_mouvement = 'ENTREE' "
+                + "group by e.id_mouvement_stock, e.nombre, e.pu, e.date_mouvement "
+                + "having e.nombre - coalesce(sum(s.nombre), 0) > 0 "
+                + orderBy;
+
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setInt(1, idArticle);
+        ResultSet rs = ps.executeQuery();
+
+        while (rs.next() && reste.compareTo(BigDecimal.ZERO) > 0) {
+            int idEntree = rs.getInt("id_mouvement_stock");
+            BigDecimal disponible = rs.getBigDecimal("reste_disponible");
+            BigDecimal pu = rs.getBigDecimal("pu");
+
+            BigDecimal quantiteSortie = reste.min(disponible);
+
+            insererMouvement(
+                    con,
+                    idArticle,
+                    "SORTIE",
+                    quantiteSortie,
+                    pu,
+                    dateMouvement,
+                    String.valueOf(idEntree));
+
+            reste = reste.subtract(quantiteSortie);
+        }
+
+        rs.close();
+        ps.close();
+
+        if (reste.compareTo(BigDecimal.ZERO) > 0) {
+            throw new SQLException("Stock insuffisant. Quantite manquante : " + reste);
         }
     }
 }

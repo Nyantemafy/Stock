@@ -1,0 +1,5 @@
+out/
+*.class
+
+# Fichier local de connexion a la base de donnees
+src/com/stock/generalisation/dao/ConnexionPostgres.java

@@ -79,6 +79,10 @@ public class AffichageGenerator {
         panel.repaint();
     }
 
+    public static JScrollPane genererScrollPane(java.awt.Component composant) {
+        return new JScrollPane(composant);
+    }
+
     public static int confirmer(java.awt.Component parent, String message) {
         return JOptionPane.showConfirmDialog(parent, message, "Confirmation", JOptionPane.YES_NO_OPTION);
     }

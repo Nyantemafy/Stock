@@ -295,9 +295,11 @@ public class Main {
 
     private void supprimerArticle() {
         try {
-            int idArticle = getIdArticleSelectionne();
-            if (AffichageGenerator.estConfirme(frame, "Supprimer cet article et tous ses mouvements ?")) {
-                dao.supprimerArticle(idArticle);
+            Article article = getArticleSelectionneDepuisTable();
+
+            if (AffichageGenerator.estConfirme(frame,
+                    "Supprimer l'article " + article.getNom() + " et tous ses mouvements ?")) {
+                dao.supprimerArticle(article.getIdArticle());
                 afficherArticles();
             }
         } catch (Exception e) {

@@ -194,17 +194,31 @@ public class ArticleDao {
     public void supprimerArticle(int idArticle) throws SQLException {
         Connection con = ConnexionPostgres.ouvrir();
 
-        PreparedStatement psMouvement = con.prepareStatement("delete from mouvement_stock where id_article = ?");
-        psMouvement.setInt(1, idArticle);
-        psMouvement.executeUpdate();
-        psMouvement.close();
+        try {
+            con.setAutoCommit(false);
 
-        PreparedStatement psArticle = con.prepareStatement("delete from article where id_article = ?");
-        psArticle.setInt(1, idArticle);
-        psArticle.executeUpdate();
-        psArticle.close();
+            PreparedStatement psMouvement = con.prepareStatement("delete from mouvement_stock where id_article = ?");
+            psMouvement.setInt(1, idArticle);
+            psMouvement.executeUpdate();
+            psMouvement.close();
 
-        con.close();
+            PreparedStatement psArticle = con.prepareStatement("delete from article where id_article = ?");
+            psArticle.setInt(1, idArticle);
+            int articlesSupprimes = psArticle.executeUpdate();
+            psArticle.close();
+
+            if (articlesSupprimes == 0) {
+                throw new SQLException("Article introuvable pour la suppression.");
+            }
+
+            con.commit();
+
+        } catch (Exception e) {
+            con.rollback();
+            throw e;
+        } finally {
+            con.close();
+        }
     }
 
     public void ajouterMouvementStock(int idArticle, String typeMouvement, BigDecimal nombre, BigDecimal pu,

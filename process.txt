@@ -56,6 +56,11 @@ Les lignes complètement vides sont ignorées.
 Une erreur est affichée si aucune ligne n’est saisie.
 Une erreur est aussi affichée si une ligne est partiellement remplie ou contient une valeur invalide.
 
+Pour la suppression d’article :
+- l’article sélectionné est récupéré depuis le tableau ;
+- le message de confirmation affiche le nom de l’article ;
+- après suppression, le tableau est rechargé.
+
 5. Changements dans le DAO
 
 ArticleDao a été complété pour enregistrer plusieurs mouvements dans une seule transaction.
@@ -75,6 +80,11 @@ Pour les sorties :
 
 Si une erreur arrive pendant le traitement d’un lot, la transaction est annulée.
 Donc soit toutes les lignes sont enregistrées, soit aucune ne l’est.
+
+La suppression d’article a aussi été sécurisée :
+- les mouvements de l’article sont supprimés avant l’article ;
+- la suppression se fait dans une transaction ;
+- si l’article n’est pas trouvé ou si une erreur arrive, la transaction est annulée.
 
 6. Changements dans les modèles
 

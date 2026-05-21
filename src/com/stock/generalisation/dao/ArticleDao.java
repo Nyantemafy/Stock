@@ -37,26 +37,37 @@ public class ArticleDao {
 
     public List<Article> listerArticles(Date dateDebut, Date dateFin) throws SQLException {
         List<Article> articles = new ArrayList<Article>();
+
         String sql = ""
-                + "select a.id_article, a.nom, tg.libeller as mode_gestion, "
-                + "coalesce(sum(case when ms.type_mouvement = 'ENTREE' then ms.nombre else -ms.nombre end), 0) "
-                + "as quantite_stock, "
-                + "coalesce(sum(case when ms.type_mouvement = 'ENTREE' then ms.nombre * ms.pu "
-                + "else -ms.nombre * ms.pu end), 0) as valeur_stock "
+                + "select "
+                + "a.id_article, "
+                + "a.nom, "
+                + "tg.libeller as mode_gestion, "
+                + "coalesce(sum(ms.nombre_signe), 0) as quantite_stock, "
+                + "coalesce(sum(ms.valeur_signe), 0) as valeur_stock "
                 + "from article a "
                 + "join type_gestion tg on tg.id_type_gestion = a.id_type_gestion "
-                + "left join mouvement_stock ms on ms.id_article = a.id_article "
-                + "and (cast(? as date) is null or ms.date_mouvement::date >= cast(? as date)) "
-                + "and (cast(? as date) is null or ms.date_mouvement::date <= cast(? as date)) "
+                + "left join ( "
+                + "    select "
+                + "    id_article, "
+                + "    date_mouvement, "
+                + "    case when type_mouvement = 'ENTREE' then nombre else -nombre end as nombre_signe, "
+                + "    case when type_mouvement = 'ENTREE' then nombre * pu else -nombre * pu end as valeur_signe "
+                + "    from mouvement_stock "
+                + ") ms on ms.id_article = a.id_article "
+                + "and (? is null or ms.date_mouvement::date >= ?) "
+                + "and (? is null or ms.date_mouvement::date <= ?) "
                 + "group by a.id_article, a.nom, tg.libeller "
                 + "order by a.nom";
 
         Connection con = ConnexionPostgres.ouvrir();
         PreparedStatement ps = con.prepareStatement(sql);
+
         ps.setDate(1, dateDebut);
         ps.setDate(2, dateDebut);
         ps.setDate(3, dateFin);
         ps.setDate(4, dateFin);
+
         ResultSet rs = ps.executeQuery();
 
         while (rs.next()) {
@@ -65,8 +76,15 @@ public class ArticleDao {
             String modeGestion = rs.getString("mode_gestion");
 
             if ("CUMP".equalsIgnoreCase(modeGestion)) {
-                BigDecimal dernierCump = calculerDernierCump(con, rs.getInt("id_article"), dateDebut, dateFin);
-                valeurStock = quantiteStock.multiply(dernierCump).setScale(2, RoundingMode.HALF_UP);
+                BigDecimal dernierCump = calculerDernierCump(
+                        con,
+                        rs.getInt("id_article"),
+                        dateDebut,
+                        dateFin);
+
+                valeurStock = quantiteStock
+                        .multiply(dernierCump)
+                        .setScale(2, RoundingMode.HALF_UP);
             }
 
             articles.add(new Article(
@@ -80,6 +98,7 @@ public class ArticleDao {
         rs.close();
         ps.close();
         con.close();
+
         return articles;
     }
 

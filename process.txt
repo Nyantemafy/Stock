@@ -1,125 +1,106 @@
 ==================================================
-PROCESS - Résumé technique de l’aléa
+PROCESS - Changements techniques effectués
 ==================================================
 
 1. Résumé de l’aléa
 
-L’aléa demandé concerne la saisie multiple des mouvements de stock.
-L’objectif est de pouvoir saisir plusieurs entrées ou plusieurs sorties de stock, puis de valider toutes les lignes en une seule fois.
+L’aléa demande de faire plusieurs saisies d’entrée ou de sortie de stock, puis de tout valider en une seule fois.
 
-2. Modifications techniques principales
+2. FormGenerator.java
 
-La saisie simple existante a été remplacée par une saisie multiple pour :
-- l’entrée de stock ;
-- la sortie de stock.
+Le service généralisé FormGenerator a été étendu pour gérer plusieurs lignes de formulaire.
 
-Chaque ligne de saisie correspond à un formulaire généré automatiquement avec le service existant FormGenerator.
-L’utilisateur peut ajouter plusieurs lignes avec le bouton "Ajouter ligne" et retirer la dernière ligne avec le bouton "Supprimer ligne".
-
-La validation reste unique :
-- l’utilisateur remplit plusieurs lignes ;
-- il clique une seule fois sur OK ;
-- toutes les lignes valides sont enregistrées ensemble.
-
-3. Changements dans les services généralisés
-
-Le service généralisé FormGenerator a été enrichi pour gérer plusieurs formulaires du même type.
-
-Méthodes ajoutées dans FormGenerator :
-- genererFormulaires : crée un conteneur avec plusieurs formulaires.
-- ajouterFormulaire : ajoute une nouvelle ligne de saisie.
+Méthodes ajoutées :
+- genererFormulaires : crée un panel avec plusieurs formulaires du même type.
+- ajouterFormulaire : ajoute une nouvelle ligne.
 - supprimerDernierFormulaire : supprime la dernière ligne.
 - getFormulaires : récupère toutes les lignes saisies.
 - estVide : permet d’ignorer une ligne totalement vide.
 
-Le service AffichageGenerator a aussi été complété avec :
-- genererScrollPane : permet d’afficher les lignes multiples dans une zone défilante.
+Ce choix permet de garder le service généralisé existant au lieu de créer un service spécifique.
 
-Aucun service spécifique à l’aléa n’a été créé.
-La logique reste donc basée sur les services généralisés existants du projet.
+3. AffichageGenerator.java
 
-4. Changements dans l’interface
+Ajout de genererScrollPane.
 
-Dans Main.java, les actions "Entree stock" et "Sortie stock" utilisent maintenant des formulaires multiples.
+Cette méthode sert à afficher les lignes multiples dans une zone défilante.
 
-Pour l’entrée de stock :
-- la fenêtre affiche la fiche de l’article sélectionné ;
-- les lignes saisies sont toutes enregistrées sur cet article ;
-- les champs utilisés restent nombre, prixUnitaire, dateMouvement et idSource.
+4. Main.java
 
-Pour la sortie de stock :
-- la fenêtre affiche aussi la fiche de l’article sélectionné ;
-- les lignes saisies sont toutes traitées comme des sorties de cet article ;
-- les champs utilisés restent nombre et dateMouvement.
+Les méthodes ajouterEntreeStock et ajouterSortieStock ont été modifiées.
 
-Les lignes complètement vides sont ignorées.
-Une erreur est affichée si aucune ligne n’est saisie.
-Une erreur est aussi affichée si une ligne est partiellement remplie ou contient une valeur invalide.
+Avant :
+- une fenêtre contenait un seul formulaire ;
+- une validation enregistrait une seule ligne.
 
-Pour la suppression d’article :
-- l’article sélectionné est récupéré depuis le tableau ;
-- le message de confirmation affiche le nom de l’article ;
-- après suppression, le tableau est rechargé.
-
-5. Changements dans le DAO
-
-ArticleDao a été complété pour enregistrer plusieurs mouvements dans une seule transaction.
+Maintenant :
+- la fenêtre contient plusieurs lignes ;
+- les boutons "Ajouter ligne" et "Supprimer ligne" permettent de gérer les lignes ;
+- une seule validation lit toutes les lignes ;
+- les lignes sont transformées en List<MouvementStock>.
 
 Méthodes ajoutées :
-- ajouterMouvementsStock : enregistre plusieurs entrées de stock.
-- ajouterSortiesStock : traite plusieurs sorties de stock.
+- creerPanelSaisiesMultiples : construit l’affichage des lignes multiples.
+- lireEntreesStock : lit toutes les lignes d’entrée.
+- lireSortiesStock : lit toutes les lignes de sortie.
+- verifierMouvementsSaisis : vérifie qu’au moins une ligne est remplie.
+- lireValeurObligatoire : vérifie les champs obligatoires.
+- lireDateMouvement : convertit la date au format yyyy-MM-dd.
 
-Pour les entrées :
-- chaque ligne est insérée dans mouvement_stock ;
-- toutes les insertions sont faites dans une transaction.
+La fiche de l’article sélectionné est affichée dans la fenêtre pour savoir sur quel produit les lignes seront enregistrées.
 
-Pour les sorties :
-- chaque ligne réutilise la logique existante FIFO, LIFO ou CUMP ;
-- la logique métier déjà présente n’a pas été remplacée ;
-- elle a été déplacée dans une méthode privée réutilisable pour pouvoir traiter une ou plusieurs sorties.
+5. MouvementStock.java
 
-Si une erreur arrive pendant le traitement d’un lot, la transaction est annulée.
-Donc soit toutes les lignes sont enregistrées, soit aucune ne l’est.
+Ajout d’un constructeur simplifié.
 
-La suppression d’article a aussi été sécurisée :
-- les mouvements de l’article sont supprimés avant l’article ;
-- la suppression se fait dans une transaction ;
-- si l’article n’est pas trouvé ou si une erreur arrive, la transaction est annulée.
+Il permet de créer un MouvementStock avec seulement :
+- typeMouvement ;
+- nombre ;
+- prixUnitaire ;
+- dateMouvement ;
+- idSource.
 
-6. Changements dans les modèles
+Cela sert à transporter les lignes saisies vers le DAO sans créer un nouveau modèle.
 
-MouvementStock a reçu un constructeur simplifié.
+6. ArticleDao.java
 
-Ce constructeur permet de créer facilement un mouvement à enregistrer sans renseigner les champs calculés comme :
-- idMouvementStock ;
-- coutTotal ;
-- coutUnitaireMoyenPondere.
+Ajout de méthodes pour enregistrer plusieurs mouvements en une seule transaction.
 
-Ces champs restent utilisés pour l’affichage des détails, mais ne sont pas nécessaires au moment de préparer une nouvelle ligne de saisie.
+Méthodes ajoutées :
+- ajouterMouvementsStock : enregistre plusieurs entrées.
+- ajouterSortiesStock : traite plusieurs sorties.
 
-7. Fichiers modifiés ou créés
+La logique existante de sortie FIFO, LIFO et CUMP a été conservée.
+Elle est réutilisée dans une méthode privée avec la même logique qu’avant.
 
-Fichiers modifiés :
+Si une ligne du lot échoue, un rollback est fait.
+Donc le lot est enregistré entièrement ou pas du tout.
+
+7. Suppression d’article
+
+La suppression d’article a été sécurisée.
+
+Changements :
+- le message de confirmation affiche le nom de l’article ;
+- les mouvements sont supprimés avant l’article ;
+- la suppression se fait dans une transaction.
+
+8. Remarque sur idSource
+
+idSource n’est pas l’id du produit.
+
+Le produit est l’article sélectionné dans le tableau.
+Son id est idArticle.
+
+idSource garde son rôle de source du mouvement.
+
+9. Fichiers modifiés
+
 - src/com/stock/generalisation/Main.java
 - src/com/stock/generalisation/dao/ArticleDao.java
 - src/com/stock/generalisation/model/MouvementStock.java
 - src/com/stock/generalisation/service/FormGenerator.java
 - src/com/stock/generalisation/service/AffichageGenerator.java
-
-Fichier créé :
 - process.txt
-
-8. Résultat technique final
-
-Le projet permet maintenant :
-- de saisir plusieurs entrées de stock en une seule validation ;
-- de saisir plusieurs sorties de stock en une seule validation ;
-- de voir clairement l’article concerné dans la fenêtre de saisie ;
-- de conserver la logique FIFO, LIFO et CUMP existante ;
-- d’enregistrer les lots de mouvements avec une transaction.
-
-Le champ idSource n’a pas été transformé en id produit.
-Le produit concerné reste l’article sélectionné dans le tableau.
-idSource garde son rôle de source du mouvement.
 
 ==================================================

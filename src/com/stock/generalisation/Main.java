@@ -9,10 +9,12 @@ import service.FicheGenerator;
 import service.FormGenerator;
 import service.SwingGenerator;
 
+import javax.swing.BorderFactory;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTable;
+import java.awt.GridLayout;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -25,6 +27,7 @@ public class Main {
     private JPanel centre;
     private JTable tableArticles;
     private JLabel etatGlobal;
+    private JLabel valeurStockGlobal;
     private JPanel filtreForm;
     private JPanel articleForm;
 
@@ -63,7 +66,7 @@ public class Main {
 
         AffichageGenerator.ajouterDansPanel(formPanel, articleForm);
         AffichageGenerator.ajouterDansPanel(formPanel,
-                AffichageGenerator.genererLabel("Modes: 1 FIFO, 2 LIFO, 3 PUMP"));
+                AffichageGenerator.genererLabel("Modes: 1 FIFO, 2 LIFO, 3 CUMP"));
         AffichageGenerator.ajouterDansPanel(formPanel,
                 AffichageGenerator.genererBouton("Creer", () -> creerArticle()));
         AffichageGenerator.ajouterDansPanel(formPanel,
@@ -132,18 +135,38 @@ public class Main {
     }
 
     private JPanel creerPanelBas() {
-        JPanel panel = AffichageGenerator.genererPanelSimple();
-        etatGlobal = AffichageGenerator.genererLabel("Stock global: 0");
+        JPanel panel = AffichageGenerator.genererPanelGrille(2, 1);
+        JPanel statistiques = AffichageGenerator.genererPanelSimple();
+        JPanel actions = AffichageGenerator.genererPanelSimple();
 
-        AffichageGenerator.ajouterDansPanel(panel, etatGlobal);
-        AffichageGenerator.ajouterDansPanel(panel, AffichageGenerator.genererBouton("Detail", () -> afficherDetail()));
-        AffichageGenerator.ajouterDansPanel(panel,
+        etatGlobal = AffichageGenerator.genererLabel("Stock global: 0");
+        valeurStockGlobal = AffichageGenerator.genererLabel("0");
+
+        AffichageGenerator.ajouterDansPanel(statistiques, etatGlobal);
+        AffichageGenerator.ajouterDansPanel(statistiques, creerCarteStatistique(
+                "Valeur de stock global",
+                valeurStockGlobal,
+                "Somme des valeurs de stock par article."));
+
+        AffichageGenerator.ajouterDansPanel(actions, AffichageGenerator.genererBouton("Detail", () -> afficherDetail()));
+        AffichageGenerator.ajouterDansPanel(actions,
                 AffichageGenerator.genererBouton("Entree stock", () -> ajouterEntreeStock()));
-        AffichageGenerator.ajouterDansPanel(panel,
+        AffichageGenerator.ajouterDansPanel(actions,
                 AffichageGenerator.genererBouton("Sortie stock", () -> ajouterSortieStock()));
-        AffichageGenerator.ajouterDansPanel(panel,
+        AffichageGenerator.ajouterDansPanel(actions,
                 AffichageGenerator.genererBouton("Supprimer article", () -> supprimerArticle()));
+
+        AffichageGenerator.ajouterDansPanel(panel, statistiques);
+        AffichageGenerator.ajouterDansPanel(panel, actions);
         return panel;
+    }
+
+    private JPanel creerCarteStatistique(String titre, JLabel valeur, String description) {
+        JPanel carte = new JPanel(new GridLayout(3, 1));
+        carte.setBorder(BorderFactory.createTitledBorder(titre));
+        carte.add(valeur);
+        carte.add(AffichageGenerator.genererLabel(description));
+        return carte;
     }
 
     private void afficherArticles() {
@@ -157,11 +180,11 @@ public class Main {
 
             AffichageGenerator.afficherTableDansPanel(centre, tableArticles);
 
-            BigDecimal total = BigDecimal.ZERO;
-            for (Article article : articles) {
-                total = total.add(article.getQuantiteStock());
-            }
-            etatGlobal.setText("Stock global: " + total);
+            BigDecimal stockGlobal = dao.calculerStockGlobal(dateDebut, dateFin);
+            etatGlobal.setText("Stock global: " + stockGlobal);
+
+            BigDecimal valeurGlobale = dao.calculerValeurStockGlobal(dateDebut, dateFin);
+            valeurStockGlobal.setText(String.valueOf(valeurGlobale));
         } catch (Exception e) {
             afficherErreur(e);
         }
@@ -234,7 +257,7 @@ public class Main {
             List<MouvementStock> details = dao.listerDetails(article.getIdArticle(), dateDebut, dateFin);
             JTable tableDetail;
 
-            if ("PUMP".equalsIgnoreCase(article.getModeGestion())) {
+            if ("CUMP".equalsIgnoreCase(article.getModeGestion())) {
                 tableDetail = SwingGenerator.genererTable(details,
                         "idMouvementStock", "typeMouvement", "nombre", "prixUnitaire", "dateMouvement", "idSource",
                         "coutUnitaireMoyenPondere");

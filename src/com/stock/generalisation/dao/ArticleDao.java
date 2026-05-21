@@ -64,7 +64,7 @@ public class ArticleDao {
             BigDecimal valeurStock = rs.getBigDecimal("valeur_stock");
             String modeGestion = rs.getString("mode_gestion");
 
-            if ("PUMP".equalsIgnoreCase(modeGestion)) {
+            if ("CUMP".equalsIgnoreCase(modeGestion)) {
                 BigDecimal dernierCump = calculerDernierCump(con, rs.getInt("id_article"), dateDebut, dateFin);
                 valeurStock = quantiteStock.multiply(dernierCump).setScale(2, RoundingMode.HALF_UP);
             }
@@ -81,6 +81,72 @@ public class ArticleDao {
         ps.close();
         con.close();
         return articles;
+    }
+
+    public BigDecimal calculerStockGlobal(Date dateDebut, Date dateFin) throws SQLException {
+        String sql = ""
+                + "select coalesce(sum(stock_article), 0) as stock_global "
+                + "from ( "
+                + "select upper(trim(a.nom)) as article_unique, "
+                + "coalesce(sum(case when ms.type_mouvement = 'ENTREE' then ms.nombre else -ms.nombre end), 0) "
+                + "as stock_article "
+                + "from article a "
+                + "left join mouvement_stock ms on ms.id_article = a.id_article "
+                + "and (cast(? as date) is null or ms.date_mouvement::date >= cast(? as date)) "
+                + "and (cast(? as date) is null or ms.date_mouvement::date <= cast(? as date)) "
+                + "group by upper(trim(a.nom)) "
+                + ") stocks";
+
+        Connection con = ConnexionPostgres.ouvrir();
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setDate(1, dateDebut);
+        ps.setDate(2, dateDebut);
+        ps.setDate(3, dateFin);
+        ps.setDate(4, dateFin);
+        ResultSet rs = ps.executeQuery();
+
+        BigDecimal stockGlobal = BigDecimal.ZERO;
+        if (rs.next()) {
+            stockGlobal = rs.getBigDecimal("stock_global");
+        }
+
+        rs.close();
+        ps.close();
+        con.close();
+        return stockGlobal;
+    }
+
+    public BigDecimal calculerValeurStockGlobal(Date dateDebut, Date dateFin) throws SQLException {
+        String sql = ""
+                + "select coalesce(sum(valeur_article), 0) as valeur_stock_global "
+                + "from ( "
+                + "select upper(trim(a.nom)) as article_unique, "
+                + "coalesce(sum(case when ms.type_mouvement = 'ENTREE' then ms.nombre * ms.pu "
+                + "else -ms.nombre * ms.pu end), 0) as valeur_article "
+                + "from article a "
+                + "left join mouvement_stock ms on ms.id_article = a.id_article "
+                + "and (cast(? as date) is null or ms.date_mouvement::date >= cast(? as date)) "
+                + "and (cast(? as date) is null or ms.date_mouvement::date <= cast(? as date)) "
+                + "group by upper(trim(a.nom)) "
+                + ") valeurs";
+
+        Connection con = ConnexionPostgres.ouvrir();
+        PreparedStatement ps = con.prepareStatement(sql);
+        ps.setDate(1, dateDebut);
+        ps.setDate(2, dateDebut);
+        ps.setDate(3, dateFin);
+        ps.setDate(4, dateFin);
+        ResultSet rs = ps.executeQuery();
+
+        BigDecimal valeurStockGlobal = BigDecimal.ZERO;
+        if (rs.next()) {
+            valeurStockGlobal = rs.getBigDecimal("valeur_stock_global");
+        }
+
+        rs.close();
+        ps.close();
+        con.close();
+        return valeurStockGlobal;
     }
 
     public void creerArticle(String nom, int idTypeGestion) throws SQLException {
@@ -328,10 +394,10 @@ public class ArticleDao {
                     ? "order by e.date_mouvement asc, e.id_mouvement_stock asc"
                     : "order by e.date_mouvement desc, e.id_mouvement_stock desc";
 
-            if ("PUMP".equalsIgnoreCase(modeGestion)) {
+            if ("CUMP".equalsIgnoreCase(modeGestion)) {
                 BigDecimal cump = calculerCump(con, idArticle);
 
-                insererMouvement(con, idArticle, "SORTIE", quantiteDemandee, cump, dateMouvement, "PUMP");
+                insererMouvement(con, idArticle, "SORTIE", quantiteDemandee, cump, dateMouvement, "CUMP");
 
                 con.commit();
                 return;

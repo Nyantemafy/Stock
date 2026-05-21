@@ -29,4 +29,4 @@ create table mouvement_stock(
    foreign key(id_article) references article(id_article)
 );
 
-insert into type_gestion(libeller) values ('FIFO'), ('LIFO'), ('PUMP');
+insert into type_gestion(libeller) values ('FIFO'), ('LIFO'), ('');

@@ -1,0 +1,76 @@
+alea 1 :
+package Test;
+
+import java.math.BigDecimal;
+
+public class Test {     
+    public static BigDecimal ajouterStock(BigDecimal stock, BigDecimal entree) {
+        return stock.add(entree);
+    }
+
+    public static void main(String[] args) {
+        BigDecimal stockInitial = new BigDecimal("100.00");
+        System.out.println("stock initial: " + stockInitial);
+
+        BigDecimal stockEnter = new BigDecimal("30.50");
+        System.out.println("entre: " + stockEnter);
+        BigDecimal nouveauStock = ajouterStock(stockInitial, stockEnter);
+        System.out.println("nouveau stock : " + nouveauStock);
+    }
+}
+
+alea 2 :
+package Test;
+
+import java.math.BigDecimal;
+
+public class Test {
+
+    public static boolean stockDisponible(BigDecimal stock, BigDecimal sortie) {
+        if (stock.compareTo(sortie) >= 0) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public static void main(String[] args) {
+        BigDecimal stock = new BigDecimal("100.00");
+        BigDecimal stockSorti = new BigDecimal("30.00");
+
+        boolean estDisponible = stockDisponible(stock, stockSorti);
+        if (estDisponible) {
+            System.out.println("Stock suffisant");
+        } else {
+            System.out.println("Stock insuffisant");
+        }
+    }
+}
+
+alea 3 :
+package dao;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+
+public class ConnexionPostgres {
+    private static final String URL = "jdbc:postgresql://localhost:5432/stock";
+    private static final String USER = "postgres";
+    private static final String PASSWORD = "antema";
+
+    public static Connection ouvrir() throws SQLException {
+        return DriverManager.getConnection(URL, USER, PASSWORD);
+    }
+}
+
+aléa 4 :
+
+ Compiler :
+
+  javac -d out src\com\stock\generalisation\dao\*.java src\com\stock\generalisation\model\*.java src\com\stock\generalisation\service\*.java src\com\stock\generalisation\Main.java
+
+Exécuter :
+
+  java -cp "out;lib\postgresql-42.7.10.jar" Main
+
